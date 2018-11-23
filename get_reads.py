@@ -1,0 +1,1 @@
+/home/kirill/projects/DarcyEllis/RNAseq_mouse_relA_ko.19.07.2018/multi-mappers/scripts/get_reads.py
