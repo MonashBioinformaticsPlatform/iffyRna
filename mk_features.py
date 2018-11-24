@@ -139,7 +139,7 @@ for chr in feats:
     else:
         empty_keys.append(chr)
 
-print("\t".join(("GeneId", "Chrom", "Start", "End", "Strand", "Nreads", "FeatSize", "Frac", "Mean", "Std")))
+print("\t".join(("#GeneID", "Chr", "Start", "End", "Strand", "Nreads", "FeatSize", "Frac", "Mean", "Std")))
 
 for chr in feats:
     if chr in empty_keys:
