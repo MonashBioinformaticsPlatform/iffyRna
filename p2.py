@@ -50,7 +50,8 @@ cnt = 1
 # Penalties for feature length. since longer feature will aggregate more reads
 # just due to size
 
-feats = {"totals": {}}
+feats = {}
+totals = {}
 
 ## NOTE WARNING!
 #     This code assumes coordinate sorted bam
@@ -105,10 +106,10 @@ for line in samfile:
 
             first = pos
             n_reads = 0
-        # BUG? what happes to the current chrom that failed the diff check?
-        # it falls through here
-        # FIXED ?
         elif chrom != prev_chrom:
+            totals[prev_chrom] = tot_reads
+            tot_reads = 0
+
             if n_reads > threshold:
 
                 name = "feature_%s" % cnt
@@ -118,66 +119,61 @@ for line in samfile:
             first = pos
             n_reads = 0
 
-        if chrom != prev_chrom:
-            # at this point all of the reads for this chrom have been recorded
-            # so calc fraction for prev chrom here
-            # store total number of reads on that chromosome
-            print("check? %s" % prev_chrom, file=sys.stderr)
-            # NOTE also here filter empty chroms out
-
-            # Basically want to delete if number of features one or less
-            # and number of reads low..
-
-            # check that dictionary isn't empty
-            if feats[prev_chrom]:
-                feats["totals"][prev_chrom] = tot_reads
-                # for current chrom mutate in place value of every feature i.e add a value
-                [feats[prev_chrom][k].append(v[2]/tot_reads) for k,v in feats[prev_chrom].items()]
-            else:
-                try:
-                    del feats[prev_chrom]
-                except KeyError:
-                    sys.exit("ERROR: can't happen 2")
-
-            tot_reads = 0
-        # keep track of full cigar reads per chromosome
         tot_reads += 1
 
         prev_pos = pos
         n_reads += 1
 
-    prev_chrom = chrom
+        prev_chrom = chrom
 
-#log_feat(prev_chrom, "last_guys", first, prev_pos+last_l, n_reads)
-#[feats[prev_chrom][k].append(v[2]/tot_reads) for k,v in feats[prev_chrom].items()]
+totals[prev_chrom] = tot_reads
+log_feat(prev_chrom, "last_guys", first, prev_pos+last_l, n_reads)
+
+empty_keys = []
 
 for chr in feats:
-    if chr == "totals":
+    if feats[chr]:
+        for k,v in feats[chr].items():
+            feats[chr][k].append(round(v[2]/totals[chr], 2))
+    else:
+        empty_keys.append(chr)
+
+print("\t".join(("GeneId", "Chrom", "Start", "End", "Strand", "Nreads", "FeatSize", "Frac", "Mean", "Std")))
+
+for chr in feats:
+    if chr in empty_keys:
         continue
 
     #fracs = [v[4] for v in feats[chr].values()]
     try:
-        print("Trying: %s" % chr)
+        #print("Trying: %s" % chr)
         fracs = [v[4] for v in feats[chr].values()]
     except IndexError:
         #print(feats[chr].values())
         sys.exit("Huh? %s" % chr)
 
     if len(fracs) == 1:
-        print(">%s\t-1\t-1" % chr)
+        #print(">%s\t-1\t-1" % chr)
+
         key = list(feats[chr].keys())[0]
-        print(chr, key, feats[chr][key])
+        v = feats[chr][key]
+        v.insert(0, key)
+        v.insert(1, chr)
+        v.insert(4, '.')
+        v += [-1, -1]
+        vals = '\t'.join(map(str, v))
+        print(vals)
         continue
 
     m = round(np.mean(fracs), 2)
     s = round(np.std(fracs), 2)
-    print(">%s\t%s\t%s" % (chr, m, s))
+    #print(">%s\t%s\t%s" % (chr, m, s))
 
     for feat, v in sorted(feats[chr].items(), key=lambda x: x[1][2], reverse=True):
-        #frac = round(float(v[2]/tot), 2)
-        #tmp.append(frac)
         if v[4] > s*2:
-            print(chr, feat, v)
-    
-    
-
+            v.insert(0, feat)
+            v.insert(1, chr)
+            v.insert(4, '.')
+            v += [m, s]
+            vals = '\t'.join(map(str, v))
+            print(vals)
