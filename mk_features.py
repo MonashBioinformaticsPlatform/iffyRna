@@ -31,7 +31,8 @@ f = sys.argv[1]
 
 samfile = pysam.AlignmentFile(f, 'rb')
 
-k = 2000
+#k = 2000
+k = 300
 threshold = 50
 
 first = None
