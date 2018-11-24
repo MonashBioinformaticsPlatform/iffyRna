@@ -1,0 +1,185 @@
+
+//- featureCounts with -R options, against `-t gene` alsow grow features by 300 bases
+//- parse out `*.featureCounts` files into NoFeatures.bam files
+//- merge all bam files into one, to capture all features
+//- call peaks - make pseude regions from NoFeatuers.bam files
+//- Make fasta file with new features sequence 
+//    - blast those sequences
+//    - interproscan for doman identification
+//- re-count NoFeatures.bam agains newly made features 
+//- perform differential expression
+
+string bamFiles
+//TODO has to be genes only, will need to check that it is the case
+string gtfFile
+string fastaRef
+string extn = "*.bam"
+int threads = 13
+bool paired
+string iffyDir = "iffyRun/"
+
+if(!iffyDir.exist()) {
+    iffyDir.mkdir()
+}
+
+//STEP ONE: featureCounts
+
+string[] depOut 
+
+for(string bam : bamFiles.dirPath(extn)) {
+    depOut += bam+".featureCounts"
+}
+
+string cntsFile = iffyDir + "NonStrandedCounts.txt"
+string logFile = iffyDir + ".log_no_features.txt"
+depOut += cntsFile
+depOut += logFile
+
+string[] bams = bamFiles.dirPath(extn)
+string bamsStr = bams.join(" ")
+
+string extrArg = ""
+if(paired) {
+    extrArg = "-p"
+}
+
+string readAssignFiles = iffy + "readAssignmentFiles/"
+if(!readAssignFiles.exist()) {
+    readAssignFiles.mkdir()
+}
+//TODO include --readExtension for both 3' and 5' as an option, manly to capture reads near an existing feature
+task(depOut <- bams, cpus := threads, taskName := "featureCounts $logFile") {
+    sys $countsExe -T $threads \
+                   -a $gtfFile \
+                   -s 0 \
+                   -R CORE \
+                   --Rpath $readAssignFiles \
+                   -t gene \
+                   $extrArg \
+                   -o cntsFile \
+                   $bamsStr > $logFile 2>&1
+}
+
+//STEP TWO: Get no feature bam files
+
+string noFeatBamFiles = iffyDir + "noFeatureBamFiles/"
+if(!noFeatureBamFiles.exist()) {
+    noFeatureBamFiles.mkdir()
+}
+
+string noFeatExe = "get_no_feature_reads.py"
+string[] noFeatBams
+
+for(string bam : bamFiles.dirPath(extn)) {
+
+    string readAssignFile = readAssigFiles + bam.baseName() + ".featureCounts"
+    string noFeatBam = noFeatureBamFiles + bam.baseName(".bam")
+    string outFile = noFeatBam + "_NoFeatures.bam"
+    string noFeatLog = noFeatureBamFile + "." + noFeatBam "_NoFeatures.log"
+    
+    noFeatBams += outFile
+
+    dep(outFile <- [bam,readAssignFile], cpus := 1, taskName := "making no features bam $noFeatBam") {
+        sys $noFeatExe $readAssignFile $bam $noFeatBam > $noFeatLog 2>&1
+    }
+}
+
+goal noFeatBams
+
+// STEP THREE: Merge and re-sort bam files
+string noFeatBamsStr = noFeatBams.join(" ")
+string mergedBam = iffyDir + "merged.bam"
+string mergedSortedBam = iffyDir + "merged_resorted.bam"
+
+task(mergedSortedBam <- noFeatBams, cpus := threads, taskName := "Merging bams into one") {
+    sys $samtoolsExe merge --threads $threads $mergedBam $noFeatBamsStr
+    sys $samtoolsExe sort --threads $threads -o $mergedSortedBam $mergedBam
+    sys rm $mergedBam
+}
+
+// STEP FOUR: Call peaks
+
+string peakCallExe = "mk_features.py"
+
+string pseudoFeatures = iffyDir + "pseudo_features.txt"
+
+task(pseudoFeatures <- mergedSortedBam, cpus := 1, taskName := "Making pseudo features") {
+    sys $peakCallExe $mergedSortedBam > $pseudoFeatures
+}
+
+// STEP FIVE: Make sequences for pseudo features
+
+string getSeqsExe = "get_seqs.py"
+
+string pseudoSeqs = iffyDir + "pseudo_seqs.fa"
+
+task(pseudoSeqs <- pseudoFeatures, cpus := 1, taskName := "Making pseudo sequnces") {
+    sys $getSeqsExe $pseudoFeatures $fastaRef > $pseudoSeqs
+}
+
+// STEP SIX: Running BLAST
+
+//TODO probably don't need blast python parse, should be able to ouput
+// in the right format, read the docs !
+
+string blastExe = "blastn"
+string blastParseExe = "parse_blast.py"
+
+string blastOut = iffyDir + "blast_out.json"
+string blastOutTxt = blastOut.swapExt(".json", ".txt")
+
+task([blastOut, blastOutTxt] <- pseudoSeqs, cpus := threads, taskName := "Running BLAST") {
+    sys $blastExe -query $psedoSeqs \
+                  -db nt \
+                  -num_threads $threads \
+                  -outfmt 15 \
+                  -perc_identity 0.95 \
+                  -out $blastOut
+    sys $blastParseExe $blastOut > $blastOutTxt
+)
+
+// STEP SEVEN: Running InterProScan
+
+string scanExe = "interproscan.sh"
+
+string scanDir = iffyDir + "interproscan/"
+if(!scanDir.exist()) {
+    scanDir.mkdir()
+}
+
+string[] scanDeps
+string[] suffix = [".gff3", ".html.tar.gz", ".json", ".fa.tsv"]
+
+for(string s : suffix) {
+    scanDeps += scanDir+$pseudoSeqs+s
+}
+
+string scanLog = scanDir + "." + $pseudoSeqs.swapExt(".fa", ".log")
+
+string blastOutTxt = blastOut.swapExt(".json", ".txt")
+
+task(scanDeps <- $pseudoSeqs, cpus := threads, taskName := "Running InterProScan") {
+    sys $scanExe --cpu $threads \
+                 --seqtype n \
+                 --formats TSV,JSON,GFF3,HTML \
+                 --output-dir $scanDir \
+                 --input $pseudoSeqs > $scanLog 2>&1
+)
+
+// STEP EIGHT: Doing counting agains pseudo features
+
+string[] pseudoCntsDeps 
+string cntsFilePseudo = iffyDir + "NonStrandedPseudoFeatureCounts.txt"
+string logFilePseudo = iffyDir + ".log_pseudo_features.txt"
+pseudoCntsDeps += cntsFile
+pseudoCntsDeps += logFile
+
+task(pseudoCntsDeps <- [noFeatBams, pseudoFeatures], cpus := threads, taskName := "featureCounts against pseudo features") {
+    sys $countsExe -T $threads \
+                   -a $pseudoFeatures \
+                   -F SAF
+                   -s 0 \
+                   $extrArg \
+                   -o cntsFilePseudo \
+                   $noFeatBamsStr > $logFilePseudo 2>&1
+}
