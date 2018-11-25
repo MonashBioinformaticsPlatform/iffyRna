@@ -1,0 +1,5 @@
+#!/bin/bash
+
+iffy_origin=`dirname "${BASH_SOURCE[0]}"`
+default_bds_config="$(which bds).config"
+bds -c ${default_bds_config} -log -reportHtml -reportYaml "${iffy_origin}"/../src/iffyRna.bds "$@"
