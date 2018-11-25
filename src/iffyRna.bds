@@ -20,6 +20,7 @@ string fastaRef
 string extn = "*.bam"
 int threads = 8
 bool paired
+string outDir
 
 string progOrig = programPath.pathName()
 
@@ -34,6 +35,9 @@ if(fastaRef.isEmpty()) {
 }
 
 string iffyDir = "iffyRun/"
+if(!outDir.isEmpty()) {
+    iffyDir = outDir.baseName() + "/"
+}
 if(!iffyDir.exists()) {
     iffyDir.mkdir()
 }
@@ -175,10 +179,10 @@ if(!scanDir.exists()) {
 }
 
 string[] scanDeps
-string[] suffix = [".gff3", ".html.tar.gz", ".json", ".fa.tsv"]
+string[] suffix = [".gff3", ".html.tar.gz", ".json", ".tsv"]
 
 for(string s : suffix) {
-    scanDeps += scanDir+pseudoSeqs+s
+    scanDeps += scanDir+pseudoSeqs.baseName()+s
 }
 
 string scanLog = scanDir + "." + pseudoSeqs.baseName().swapExt(".fa", ".log")
