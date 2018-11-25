@@ -21,6 +21,8 @@ string extn = "*.bam"
 int threads = 8
 bool paired
 
+string progOrig = programPath.pathName()
+
 if(bamFiles.isEmpty()) {
     error "specify -bamFiles"
 }
@@ -43,7 +45,7 @@ if(!readAssignFiles.exists()) {
 
 //STEP ONE: featureCounts
 
-string countsExe = "/home/kirill/downloads/subread-1.6.3-source/bin/featureCounts"
+string countsExe = "featureCounts"
 string[] depOut 
 
 for(string bam : bamFiles.dirPath(extn)) {
@@ -84,7 +86,7 @@ if(!noFeatBamFiles.exists()) {
     noFeatBamFiles.mkdir()
 }
 
-string noFeatExe = "/scratch/kirill/projects/ABACBS.2018.11.16/mouse/scripts/get_no_feature_reads.py"
+string noFeatExe = progOrig + "/../scripts/get_no_feature_reads.py"
 
 string[] noFeatBams
 
@@ -122,7 +124,7 @@ goal mergedSortedBam
 
 // STEP FOUR: Call peaks
 
-string peakCallExe = "/scratch/kirill/projects/ABACBS.2018.11.16/mouse/scripts/mk_features.py"
+string peakCallExe = progOrig + "/../scripts/mk_features.py"
 
 string pseudoFeatures = iffyDir + "pseudo_features.txt"
 
@@ -132,7 +134,7 @@ task(pseudoFeatures <- mergedSortedBam, cpus := 1, taskName := "Making pseudo fe
 
 // STEP FIVE: Make sequences for pseudo features
 
-string getSeqsExe = "/scratch/kirill/projects/ABACBS.2018.11.16/mouse/scripts/get_seqs.py"
+string getSeqsExe = progOrig + "/../scripts/get_seqs.py"
 
 string pseudoSeqs = iffyDir + "pseudo_seqs.fa"
 
@@ -148,7 +150,7 @@ task(pseudoSeqs <- pseudoFeatures, cpus := 1, taskName := "Making pseudo sequnce
 //TODO need to make sure db is in the path export BLASTDB=/references/blast
 
 string blastExe = "blastn"
-string blastParseExe = "/scratch/kirill/projects/ABACBS.2018.11.16/mouse/scripts/parse_blast.py"
+string blastParseExe = progOrig + "/../scripts/parse_blast.py"
 
 string blastOut = iffyDir + "blast_out.json"
 string blastOutTxt = blastOut.swapExt(".json", ".txt")
@@ -165,7 +167,7 @@ task([blastOut, blastOutTxt] <- pseudoSeqs, cpus := threads, taskName := "Runnin
 
 // STEP SEVEN: Running InterProScan
 
-string scanExe = "/home/kirill/downloads/interproscan-5.31-70.0/interproscan.sh"
+string scanExe = "interproscan.sh"
 
 string scanDir = iffyDir + "interproscan/"
 if(!scanDir.exists()) {

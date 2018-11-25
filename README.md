@@ -32,6 +32,13 @@ the counting will be run with `featureCounts -t gene` options. Check that 3rd co
 
 It's written in [BigDataScript (bds) language](http://pcingola.github.io/BigDataScript/bigDataScript_manual.html), please intalls as per bds docs, before running `iffyRna`
 
+#### These tools need to be in your path
+
+- `samtools`
+- `featureCounts`
+- `blastn`
+- `interproscan.sh`
+
 ## Future
 
 - package with conda
