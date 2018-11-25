@@ -133,11 +133,12 @@ log_feat(prev_chrom, "last_guys", first, prev_pos+last_l, n_reads)
 empty_keys = []
 
 for chr in feats:
-    if feats[chr]:
+    key = feats.get(chr)
+    if key is None:
+        empty_keys.append(chr)
+    else:
         for k,v in feats[chr].items():
             feats[chr][k].append(round(v[2]/totals[chr], 2))
-    else:
-        empty_keys.append(chr)
 
 print("\t".join(("#GeneID", "Chr", "Start", "End", "Strand", "Nreads", "FeatSize", "Frac", "Mean", "Std")))
 
